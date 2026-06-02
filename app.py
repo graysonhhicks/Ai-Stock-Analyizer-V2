@@ -2,7 +2,6 @@ import streamlit as st
 import yfinance as yf
 import plotly.graph_objects as go
 import pandas as pd
-import requests
 
 # ==================================================
 # PAGE SETUP
@@ -35,17 +34,20 @@ div[data-testid="metric-container"] {
 
 st.title("AI-Powered Stock Market Analyzer")
 
-st.write("AI-driven stock scoring system using S&P 500 data.")
+st.write("AI-driven stock ranking system for market analysis.")
 
 # ==================================================
-# GET S&P 500 LIST
+# SAFE S&P 500 LIST (STATIC - NO SCRAPING)
 # ==================================================
 
-@st.cache_data
 def get_sp500_tickers():
-    url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-    table = pd.read_html(url)[0]
-    return table["Symbol"].tolist()
+    return [
+        "AAPL","MSFT","NVDA","AMZN","GOOGL","META","TSLA","BRK-B","AVGO","JPM",
+        "V","UNH","XOM","LLY","MA","HD","PG","COST","JNJ","ABBV",
+        "MRK","BAC","NFLX","KO","CRM","ORCL","ADBE","PEP","TMO","WMT",
+        "CSCO","ACN","ABT","MCD","DHR","LIN","TXN","AMD","PM","VZ",
+        "INTC","DIS","CAT","NEE","MS","GS","RTX","IBM","AMGN","HON"
+    ]
 
 # ==================================================
 # LOAD STOCK DATA
@@ -69,7 +71,7 @@ def load_stock(ticker):
     return info, hist
 
 # ==================================================
-# SCORING FUNCTION
+# SCORING SYSTEM
 # ==================================================
 
 def score_stock(ticker):
@@ -112,7 +114,7 @@ def score_stock(ticker):
     }
 
 # ==================================================
-# INDIVIDUAL STOCK VIEW
+# INDIVIDUAL STOCK ANALYSIS
 # ==================================================
 
 ticker = st.text_input("Enter Stock Ticker", "AAPL").upper()
@@ -143,7 +145,7 @@ if ticker:
     col3.metric("ROE", f"{roe:.2f}%")
 
     st.subheader(f"AI Score: {ai_score:.2f}")
-    st.subheader(f"Risk: {risk}")
+    st.subheader(f"Risk Level: {risk}")
 
     if not hist.empty:
 
@@ -188,10 +190,7 @@ if st.button("Run S&P 500 Scan"):
 
         progress.progress((i + 1) / total)
 
-    df = pd.DataFrame(results)
-
-    # Remove bad data
-    df = df.dropna()
+    df = pd.DataFrame(results).dropna()
 
     # ==================================================
     # TOP AI STOCKS
@@ -200,8 +199,7 @@ if st.button("Run S&P 500 Scan"):
     st.subheader("Top 10 AI Stocks")
 
     top_ai = df.sort_values("AI Score", ascending=False).head(10)
-
-    st.dataframe(top_ai[["Ticker", "AI Score"]])
+    st.dataframe(top_ai)
 
     # ==================================================
     # TOP GROWTH STOCKS
@@ -210,8 +208,7 @@ if st.button("Run S&P 500 Scan"):
     st.subheader("Top 10 Growth Stocks")
 
     top_growth = df.sort_values("Growth Score", ascending=False).head(10)
-
-    st.dataframe(top_growth[["Ticker", "Growth Score"]])
+    st.dataframe(top_growth)
 
     # ==================================================
     # LOW RISK STOCKS
@@ -220,8 +217,7 @@ if st.button("Run S&P 500 Scan"):
     st.subheader("Top 10 Low-Risk Stocks")
 
     low_risk = df.sort_values("Risk Score", ascending=True).head(10)
-
-    st.dataframe(low_risk[["Ticker", "Risk Score"]])
+    st.dataframe(low_risk)
 
     # ==================================================
     # VALUE STOCKS
@@ -230,13 +226,12 @@ if st.button("Run S&P 500 Scan"):
     st.subheader("Top 10 Value Stocks")
 
     top_value = df.sort_values("Value Score", ascending=False).head(10)
-
-    st.dataframe(top_value[["Ticker", "Value Score"]])
+    st.dataframe(top_value)
 
     # ==================================================
-    # BEST OVERALL PICK
+    # BEST PICK
     # ==================================================
 
     best = df.sort_values("AI Score", ascending=False).iloc[0]["Ticker"]
 
-    st.success(f"Top AI Pick Right Now: {best}")
+    st.success(f"Top AI Pick: {best}")
