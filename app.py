@@ -34,7 +34,7 @@ div[data-testid="metric-container"] {
 
 st.title("AI-Powered Stock Market Analyzer")
 
-st.write("AI-driven stock ranking system for S&P 500 analysis.")
+st.write("Stable S&P 500 AI scoring system (no missing stocks).")
 
 # ==================================================
 # S&P 500 LIST (SAFE STATIC)
@@ -50,7 +50,7 @@ def get_sp500_tickers():
     ]
 
 # ==================================================
-# NORMALIZATION HELPERS
+# SAFE NORMALIZATION
 # ==================================================
 
 def normalize_score(score):
@@ -65,25 +65,22 @@ def classify(score):
         return "Bad"
     elif score < 40:
         return "OK"
-    else:
-        return "Good"
+    return "Good"
 
 # ==================================================
-# LOAD STOCK DATA
+# STOCK DATA LOADER
 # ==================================================
 
 @st.cache_data(ttl=3600)
 def load_stock(ticker):
-
     stock = yf.Ticker(ticker)
 
     try:
-        info = stock.info
+        info = stock.info or {}
     except:
         info = {}
 
     try:
-        # ✅ UPDATED FROM 6mo → 1y
         hist = stock.history(period="1y")
     except:
         hist = pd.DataFrame()
@@ -91,7 +88,7 @@ def load_stock(ticker):
     return info, hist
 
 # ==================================================
-# SCORING FUNCTION
+# SCORING FUNCTION (FIXED)
 # ==================================================
 
 def score_stock(ticker):
@@ -99,15 +96,19 @@ def score_stock(ticker):
     stock = yf.Ticker(ticker)
 
     try:
-        info = stock.info
+        info = stock.info or {}
     except:
-        return None
+        info = {}
 
     revenue_growth = (info.get("revenueGrowth") or 0) * 100
     profit_margin = (info.get("profitMargins") or 0) * 100
     roe = (info.get("returnOnEquity") or 0) * 100
     beta = info.get("beta") or 1
     pe = info.get("trailingPE") or 20
+
+    # -------------------------
+    # RAW SCORES
+    # -------------------------
 
     raw_ai = (
         revenue_growth * 0.5 +
@@ -172,7 +173,7 @@ if ticker:
     st.subheader(f"AI Score: {ai_score:.2f} ({rating})")
     st.subheader(f"Risk Level: {risk}")
 
-    # 📊 1 YEAR CHART
+    # 1 YEAR CHART
     if not hist.empty:
 
         fig = go.Figure()
@@ -193,7 +194,7 @@ if ticker:
         st.plotly_chart(fig, use_container_width=True)
 
 # ==================================================
-# S&P 500 SCAN
+# S&P 500 SCAN (FIXED - NO DROPPING STOCKS)
 # ==================================================
 
 st.header("S&P 500 AI Market Scanner")
@@ -201,7 +202,6 @@ st.header("S&P 500 AI Market Scanner")
 if st.button("Run S&P 500 Scan"):
 
     tickers = get_sp500_tickers()
-
     results = []
 
     progress = st.progress(0)
@@ -211,29 +211,49 @@ if st.button("Run S&P 500 Scan"):
 
         data = score_stock(t)
 
+        # ALWAYS KEEP RESULT (NO DROPNA LOSS)
         if data:
             results.append(data)
 
         progress.progress((i + 1) / total)
 
-    df = pd.DataFrame(results).dropna()
+    df = pd.DataFrame(results)
 
+    # only remove rows with missing AI Score (safe)
+    df = df[df["AI Score"].notna()]
+
+    # ==================================================
     # TOP AI STOCKS
+    # ==================================================
+
     st.subheader("Top 10 AI Stocks")
     st.dataframe(df.sort_values("AI Score", ascending=False).head(10))
 
+    # ==================================================
     # TOP GROWTH STOCKS
+    # ==================================================
+
     st.subheader("Top 10 Growth Stocks")
     st.dataframe(df.sort_values("Growth Score", ascending=False).head(10))
 
+    # ==================================================
     # LOW RISK STOCKS
+    # ==================================================
+
     st.subheader("Top 10 Low-Risk Stocks")
     st.dataframe(df.sort_values("Risk Score", ascending=True).head(10))
 
+    # ==================================================
     # VALUE STOCKS
+    # ==================================================
+
     st.subheader("Top 10 Value Stocks")
     st.dataframe(df.sort_values("Value Score", ascending=False).head(10))
 
+    # ==================================================
     # BEST PICK
+    # ==================================================
+
     best = df.sort_values("AI Score", ascending=False).iloc[0]["Ticker"]
+
     st.success(f"Top AI Pick: {best}")
