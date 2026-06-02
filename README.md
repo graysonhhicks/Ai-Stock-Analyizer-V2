@@ -1,2 +1,17 @@
-# Ai-Stock-Analyizer-V2
-I am developing an AI-powered stock market analysis website that evaluates companies using key financial indicators and quantitative modeling. The platform analyzes factors such as six-month revenue growth, profit margins, and return on equity through a weighted scoring system to determine whether a stock is categorized as “Lucrative/Profitable,” “Neutral Profit,” or “Unlikely Profitable.” In addition to profitability analysis, the system also measures investment risk by examining volatility and financial stability metrics to classify stocks as high, medium, or low risk. The website includes interactive financial charts, live market data, and automatically generated AI summaries that explain each stock’s performance and outlook in detail. Built using Python, financial data APIs, and data visualization tools, the project combines concepts from artificial intelligence, finance, and data science to create a functional investment research platform.
+# AI Stock Analyzer
+
+An AI-powered stock market analysis platform built with Streamlit and Yahoo Finance.
+
+Features:
+- Revenue growth analysis
+- Profit margin analysis
+- Return on equity analysis
+- Risk classification
+- Interactive stock charts
+- AI-generated stock summaries
+
+Built using:
+- Python
+- Streamlit
+- Yahoo Finance API
+- Plotly
