@@ -34,7 +34,7 @@ div[data-testid="metric-container"] {
 
 st.title("AI-Powered Stock Market Analyzer")
 
-st.write("Normalized AI scoring system (0–100 scale).")
+st.write("AI-driven stock ranking system for S&P 500 analysis.")
 
 # ==================================================
 # S&P 500 LIST (SAFE STATIC)
@@ -50,7 +50,7 @@ def get_sp500_tickers():
     ]
 
 # ==================================================
-# NORMALIZATION + SCORING HELPERS
+# NORMALIZATION HELPERS
 # ==================================================
 
 def normalize_score(score):
@@ -83,7 +83,8 @@ def load_stock(ticker):
         info = {}
 
     try:
-        hist = stock.history(period="6mo")
+        # ✅ UPDATED FROM 6mo → 1y
+        hist = stock.history(period="1y")
     except:
         hist = pd.DataFrame()
 
@@ -108,15 +109,13 @@ def score_stock(ticker):
     beta = info.get("beta") or 1
     pe = info.get("trailingPE") or 20
 
-    # -----------------------------
-    # RAW SCORES
-    # -----------------------------
-
     raw_ai = (
         revenue_growth * 0.5 +
         profit_margin * 0.3 +
         roe * 0.2
     )
+
+    ai_score = normalize_score(raw_ai)
 
     growth_score = revenue_growth + roe
 
@@ -127,12 +126,6 @@ def score_stock(ticker):
         profit_margin +
         roe
     )
-
-    # -----------------------------
-    # NORMALIZED AI SCORE (0–100)
-    # -----------------------------
-
-    ai_score = normalize_score(raw_ai)
 
     return {
         "Ticker": ticker,
@@ -179,6 +172,7 @@ if ticker:
     st.subheader(f"AI Score: {ai_score:.2f} ({rating})")
     st.subheader(f"Risk Level: {risk}")
 
+    # 📊 1 YEAR CHART
     if not hist.empty:
 
         fig = go.Figure()
@@ -192,7 +186,7 @@ if ticker:
         )
 
         fig.update_layout(
-            title="6-Month Price Chart",
+            title="1-Year Stock Price History",
             height=450
         )
 
@@ -224,46 +218,22 @@ if st.button("Run S&P 500 Scan"):
 
     df = pd.DataFrame(results).dropna()
 
-    # ==================================================
     # TOP AI STOCKS
-    # ==================================================
-
     st.subheader("Top 10 AI Stocks")
+    st.dataframe(df.sort_values("AI Score", ascending=False).head(10))
 
-    top_ai = df.sort_values("AI Score", ascending=False).head(10)
-    st.dataframe(top_ai)
-
-    # ==================================================
     # TOP GROWTH STOCKS
-    # ==================================================
-
     st.subheader("Top 10 Growth Stocks")
+    st.dataframe(df.sort_values("Growth Score", ascending=False).head(10))
 
-    top_growth = df.sort_values("Growth Score", ascending=False).head(10)
-    st.dataframe(top_growth)
-
-    # ==================================================
     # LOW RISK STOCKS
-    # ==================================================
-
     st.subheader("Top 10 Low-Risk Stocks")
+    st.dataframe(df.sort_values("Risk Score", ascending=True).head(10))
 
-    low_risk = df.sort_values("Risk Score", ascending=True).head(10)
-    st.dataframe(low_risk)
-
-    # ==================================================
     # VALUE STOCKS
-    # ==================================================
-
     st.subheader("Top 10 Value Stocks")
+    st.dataframe(df.sort_values("Value Score", ascending=False).head(10))
 
-    top_value = df.sort_values("Value Score", ascending=False).head(10)
-    st.dataframe(top_value)
-
-    # ==================================================
     # BEST PICK
-    # ==================================================
-
     best = df.sort_values("AI Score", ascending=False).iloc[0]["Ticker"]
-
     st.success(f"Top AI Pick: {best}")
