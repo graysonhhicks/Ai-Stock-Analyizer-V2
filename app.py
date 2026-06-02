@@ -34,10 +34,10 @@ div[data-testid="metric-container"] {
 
 st.title("AI-Powered Stock Market Analyzer")
 
-st.write("AI-driven stock ranking system for market analysis.")
+st.write("Normalized AI scoring system (0–100 scale).")
 
 # ==================================================
-# SAFE S&P 500 LIST (STATIC - NO SCRAPING)
+# S&P 500 LIST (SAFE STATIC)
 # ==================================================
 
 def get_sp500_tickers():
@@ -48,6 +48,25 @@ def get_sp500_tickers():
         "CSCO","ACN","ABT","MCD","DHR","LIN","TXN","AMD","PM","VZ",
         "INTC","DIS","CAT","NEE","MS","GS","RTX","IBM","AMGN","HON"
     ]
+
+# ==================================================
+# NORMALIZATION + SCORING HELPERS
+# ==================================================
+
+def normalize_score(score):
+    if score < 0:
+        return 0
+    if score > 100:
+        return 100
+    return score
+
+def classify(score):
+    if score < 20:
+        return "Bad"
+    elif score < 40:
+        return "OK"
+    else:
+        return "Good"
 
 # ==================================================
 # LOAD STOCK DATA
@@ -71,7 +90,7 @@ def load_stock(ticker):
     return info, hist
 
 # ==================================================
-# SCORING SYSTEM
+# SCORING FUNCTION
 # ==================================================
 
 def score_stock(ticker):
@@ -89,7 +108,11 @@ def score_stock(ticker):
     beta = info.get("beta") or 1
     pe = info.get("trailingPE") or 20
 
-    ai_score = (
+    # -----------------------------
+    # RAW SCORES
+    # -----------------------------
+
+    raw_ai = (
         revenue_growth * 0.5 +
         profit_margin * 0.3 +
         roe * 0.2
@@ -104,6 +127,12 @@ def score_stock(ticker):
         profit_margin +
         roe
     )
+
+    # -----------------------------
+    # NORMALIZED AI SCORE (0–100)
+    # -----------------------------
+
+    ai_score = normalize_score(raw_ai)
 
     return {
         "Ticker": ticker,
@@ -128,11 +157,14 @@ if ticker:
     roe = (info.get("returnOnEquity") or 0) * 100
     beta = info.get("beta") or 1
 
-    ai_score = (
+    raw_ai = (
         revenue_growth * 0.5 +
         profit_margin * 0.3 +
         roe * 0.2
     )
+
+    ai_score = normalize_score(raw_ai)
+    rating = classify(ai_score)
 
     risk = "Low" if beta < 1 else "Medium" if beta < 1.5 else "High"
 
@@ -144,7 +176,7 @@ if ticker:
     col2.metric("Profit Margin", f"{profit_margin:.2f}%")
     col3.metric("ROE", f"{roe:.2f}%")
 
-    st.subheader(f"AI Score: {ai_score:.2f}")
+    st.subheader(f"AI Score: {ai_score:.2f} ({rating})")
     st.subheader(f"Risk Level: {risk}")
 
     if not hist.empty:
