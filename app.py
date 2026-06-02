@@ -33,11 +33,10 @@ div[data-testid="metric-container"] {
 """, unsafe_allow_html=True)
 
 st.title("AI-Powered Stock Market Analyzer")
-
-st.write("Stable S&P 500 AI scoring system (no missing stocks).")
+st.write("Improved scoring system with missing-data handling (Boeing fix included).")
 
 # ==================================================
-# S&P 500 LIST (SAFE STATIC)
+# S&P 500 LIST (STATIC)
 # ==================================================
 
 def get_sp500_tickers():
@@ -50,15 +49,11 @@ def get_sp500_tickers():
     ]
 
 # ==================================================
-# SAFE NORMALIZATION
+# HELPERS
 # ==================================================
 
-def normalize_score(score):
-    if score < 0:
-        return 0
-    if score > 100:
-        return 100
-    return score
+def normalize(score):
+    return max(0, min(100, score))
 
 def classify(score):
     if score < 20:
@@ -68,7 +63,7 @@ def classify(score):
     return "Good"
 
 # ==================================================
-# STOCK DATA LOADER
+# LOAD STOCK DATA
 # ==================================================
 
 @st.cache_data(ttl=3600)
@@ -100,23 +95,30 @@ def score_stock(ticker):
     except:
         info = {}
 
-    revenue_growth = (info.get("revenueGrowth") or 0) * 100
-    profit_margin = (info.get("profitMargins") or 0) * 100
-    roe = (info.get("returnOnEquity") or 0) * 100
+    # --------------------------------------------------
+    # FIX: Use realistic fallback values instead of 0
+    # --------------------------------------------------
+
+    revenue_growth = info.get("revenueGrowth")
+    profit_margin = info.get("profitMargins")
+    roe = info.get("returnOnEquity")
+
+    # Market-average fallback assumptions
+    revenue_growth = (revenue_growth if revenue_growth is not None else 0.08) * 100
+    profit_margin = (profit_margin if profit_margin is not None else 0.10) * 100
+    roe = (roe if roe is not None else 0.12) * 100
+
     beta = info.get("beta") or 1
     pe = info.get("trailingPE") or 20
 
-    # -------------------------
-    # RAW SCORES
-    # -------------------------
-
+    # AI SCORE
     raw_ai = (
         revenue_growth * 0.5 +
         profit_margin * 0.3 +
         roe * 0.2
     )
 
-    ai_score = normalize_score(raw_ai)
+    ai_score = normalize(raw_ai)
 
     growth_score = revenue_growth + roe
 
@@ -137,7 +139,7 @@ def score_stock(ticker):
     }
 
 # ==================================================
-# INDIVIDUAL STOCK ANALYSIS
+# INDIVIDUAL STOCK
 # ==================================================
 
 ticker = st.text_input("Enter Stock Ticker", "AAPL").upper()
@@ -146,9 +148,9 @@ if ticker:
 
     info, hist = load_stock(ticker)
 
-    revenue_growth = (info.get("revenueGrowth") or 0) * 100
-    profit_margin = (info.get("profitMargins") or 0) * 100
-    roe = (info.get("returnOnEquity") or 0) * 100
+    revenue_growth = (info.get("revenueGrowth") or 0.08) * 100
+    profit_margin = (info.get("profitMargins") or 0.10) * 100
+    roe = (info.get("returnOnEquity") or 0.12) * 100
     beta = info.get("beta") or 1
 
     raw_ai = (
@@ -157,7 +159,7 @@ if ticker:
         roe * 0.2
     )
 
-    ai_score = normalize_score(raw_ai)
+    ai_score = normalize(raw_ai)
     rating = classify(ai_score)
 
     risk = "Low" if beta < 1 else "Medium" if beta < 1.5 else "High"
@@ -173,7 +175,6 @@ if ticker:
     st.subheader(f"AI Score: {ai_score:.2f} ({rating})")
     st.subheader(f"Risk Level: {risk}")
 
-    # 1 YEAR CHART
     if not hist.empty:
 
         fig = go.Figure()
@@ -194,7 +195,7 @@ if ticker:
         st.plotly_chart(fig, use_container_width=True)
 
 # ==================================================
-# S&P 500 SCAN (FIXED - NO DROPPING STOCKS)
+# S&P 500 SCAN
 # ==================================================
 
 st.header("S&P 500 AI Market Scanner")
@@ -210,50 +211,30 @@ if st.button("Run S&P 500 Scan"):
     for i, t in enumerate(tickers):
 
         data = score_stock(t)
-
-        # ALWAYS KEEP RESULT (NO DROPNA LOSS)
-        if data:
-            results.append(data)
+        results.append(data)
 
         progress.progress((i + 1) / total)
 
     df = pd.DataFrame(results)
 
-    # only remove rows with missing AI Score (safe)
     df = df[df["AI Score"].notna()]
 
-    # ==================================================
     # TOP AI STOCKS
-    # ==================================================
-
     st.subheader("Top 10 AI Stocks")
     st.dataframe(df.sort_values("AI Score", ascending=False).head(10))
 
-    # ==================================================
     # TOP GROWTH STOCKS
-    # ==================================================
-
     st.subheader("Top 10 Growth Stocks")
     st.dataframe(df.sort_values("Growth Score", ascending=False).head(10))
 
-    # ==================================================
     # LOW RISK STOCKS
-    # ==================================================
-
     st.subheader("Top 10 Low-Risk Stocks")
     st.dataframe(df.sort_values("Risk Score", ascending=True).head(10))
 
-    # ==================================================
     # VALUE STOCKS
-    # ==================================================
-
     st.subheader("Top 10 Value Stocks")
     st.dataframe(df.sort_values("Value Score", ascending=False).head(10))
 
-    # ==================================================
     # BEST PICK
-    # ==================================================
-
     best = df.sort_values("AI Score", ascending=False).iloc[0]["Ticker"]
-
     st.success(f"Top AI Pick: {best}")
