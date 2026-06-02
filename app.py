@@ -2,23 +2,23 @@ import streamlit as st
 import yfinance as yf
 import plotly.graph_objects as go
 import pandas as pd
+import requests
 
-# --------------------------------------------------
-# PAGE CONFIG
-# --------------------------------------------------
+# ==================================================
+# PAGE SETUP
+# ==================================================
 
 st.set_page_config(
     page_title="AI Stock Analyzer",
     layout="wide"
 )
 
-# --------------------------------------------------
+# ==================================================
 # DARK MODE
-# --------------------------------------------------
+# ==================================================
 
 st.markdown("""
 <style>
-
 .stApp {
     background-color: #0E1117;
     color: white;
@@ -28,44 +28,28 @@ div[data-testid="metric-container"] {
     background-color: #161B22;
     border: 1px solid #30363D;
     padding: 12px;
-    border-radius: 12px;
+    border-radius: 10px;
 }
-
 </style>
 """, unsafe_allow_html=True)
 
-# --------------------------------------------------
-# TITLE
-# --------------------------------------------------
-
 st.title("AI-Powered Stock Market Analyzer")
 
-st.write("""
-Analyze stocks using revenue growth,
-profit margins, return on equity,
-and risk metrics.
-""")
+st.write("AI-driven stock scoring system using S&P 500 data.")
 
-# --------------------------------------------------
-# WATCHLIST FOR MARKET RANKINGS
-# --------------------------------------------------
+# ==================================================
+# GET S&P 500 LIST
+# ==================================================
 
-WATCHLIST = [
-    "AAPL",
-    "MSFT",
-    "NVDA",
-    "GOOGL",
-    "AMZN",
-    "META",
-    "TSLA",
-    "JPM",
-    "V",
-    "WMT"
-]
+@st.cache_data
+def get_sp500_tickers():
+    url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+    table = pd.read_html(url)[0]
+    return table["Symbol"].tolist()
 
-# --------------------------------------------------
-# STOCK DATA FUNCTION
-# --------------------------------------------------
+# ==================================================
+# LOAD STOCK DATA
+# ==================================================
 
 @st.cache_data(ttl=3600)
 def load_stock(ticker):
@@ -74,30 +58,68 @@ def load_stock(ticker):
 
     try:
         info = stock.info
-    except Exception:
+    except:
         info = {}
 
     try:
-        history = stock.history(period="6mo")
-    except Exception:
-        history = pd.DataFrame()
+        hist = stock.history(period="6mo")
+    except:
+        hist = pd.DataFrame()
 
-    return info, history
+    return info, hist
 
+# ==================================================
+# SCORING FUNCTION
+# ==================================================
 
-# --------------------------------------------------
-# RANKING FUNCTION
-# --------------------------------------------------
-
-@st.cache_data(ttl=3600)
-def get_stock_score(ticker):
+def score_stock(ticker):
 
     stock = yf.Ticker(ticker)
 
     try:
         info = stock.info
-    except Exception:
+    except:
         return None
+
+    revenue_growth = (info.get("revenueGrowth") or 0) * 100
+    profit_margin = (info.get("profitMargins") or 0) * 100
+    roe = (info.get("returnOnEquity") or 0) * 100
+    beta = info.get("beta") or 1
+    pe = info.get("trailingPE") or 20
+
+    ai_score = (
+        revenue_growth * 0.5 +
+        profit_margin * 0.3 +
+        roe * 0.2
+    )
+
+    growth_score = revenue_growth + roe
+
+    risk_score = beta
+
+    value_score = (
+        (100 / pe if pe > 0 else 0) +
+        profit_margin +
+        roe
+    )
+
+    return {
+        "Ticker": ticker,
+        "AI Score": ai_score,
+        "Growth Score": growth_score,
+        "Risk Score": risk_score,
+        "Value Score": value_score
+    }
+
+# ==================================================
+# INDIVIDUAL STOCK VIEW
+# ==================================================
+
+ticker = st.text_input("Enter Stock Ticker", "AAPL").upper()
+
+if ticker:
+
+    info, hist = load_stock(ticker)
 
     revenue_growth = (info.get("revenueGrowth") or 0) * 100
     profit_margin = (info.get("profitMargins") or 0) * 100
@@ -105,204 +127,116 @@ def get_stock_score(ticker):
     beta = info.get("beta") or 1
 
     ai_score = (
-        revenue_growth * 0.50
-        + profit_margin * 0.30
-        + roe * 0.20
+        revenue_growth * 0.5 +
+        profit_margin * 0.3 +
+        roe * 0.2
     )
 
-    investment_score = (
-        revenue_growth * 0.30
-        + profit_margin * 0.20
-        + roe * 0.20
-        - beta * 5
-    )
-
-    return {
-        "Ticker": ticker,
-        "AI Score": round(ai_score, 2),
-        "Investment Score": round(investment_score, 2)
-    }
-
-# --------------------------------------------------
-# STOCK SEARCH
-# --------------------------------------------------
-
-ticker = st.text_input(
-    "Enter Stock Ticker",
-    value="AAPL"
-).upper()
-
-# --------------------------------------------------
-# INDIVIDUAL STOCK ANALYSIS
-# --------------------------------------------------
-
-if ticker:
-
-    info, history = load_stock(ticker)
-
-    revenue_growth = (info.get("revenueGrowth") or 0) * 100
-    profit_margin = (info.get("profitMargins") or 0) * 100
-    roe = (info.get("returnOnEquity") or 0) * 100
-    beta = info.get("beta") or 1
-
-    score = (
-        revenue_growth * 0.50
-        + profit_margin * 0.30
-        + roe * 0.20
-    )
-
-    if score >= 70:
-        rating = "Lucrative / Profitable"
-    elif score >= 40:
-        rating = "Neutral Profit"
-    else:
-        rating = "Unlikely Profitable"
-
-    if beta > 1.5:
-        risk = "High Risk"
-    elif beta > 1:
-        risk = "Medium Risk"
-    else:
-        risk = "Low Risk"
+    risk = "Low" if beta < 1 else "Medium" if beta < 1.5 else "High"
 
     st.header(info.get("longName", ticker))
 
     col1, col2, col3 = st.columns(3)
 
-    col1.metric(
-        "Revenue Growth",
-        f"{revenue_growth:.2f}%"
-    )
+    col1.metric("Revenue Growth", f"{revenue_growth:.2f}%")
+    col2.metric("Profit Margin", f"{profit_margin:.2f}%")
+    col3.metric("ROE", f"{roe:.2f}%")
 
-    col2.metric(
-        "Profit Margin",
-        f"{profit_margin:.2f}%"
-    )
+    st.subheader(f"AI Score: {ai_score:.2f}")
+    st.subheader(f"Risk: {risk}")
 
-    col3.metric(
-        "Return on Equity",
-        f"{roe:.2f}%"
-    )
-
-    st.subheader(f"AI Financial Score: {score:.2f}")
-    st.subheader(f"Profitability: {rating}")
-    st.subheader(f"Risk Level: {risk}")
-
-    # STOCK CHART
-
-    if not history.empty:
+    if not hist.empty:
 
         fig = go.Figure()
 
         fig.add_trace(
             go.Scatter(
-                x=history.index,
-                y=history["Close"],
-                mode="lines",
-                name="Close Price"
+                x=hist.index,
+                y=hist["Close"],
+                mode="lines"
             )
         )
 
         fig.update_layout(
-            title="6-Month Stock Price History",
-            xaxis_title="Date",
-            yaxis_title="Price ($)",
-            height=500
+            title="6-Month Price Chart",
+            height=450
         )
 
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
+        st.plotly_chart(fig, use_container_width=True)
 
-    # SUMMARY
+# ==================================================
+# S&P 500 SCAN
+# ==================================================
 
-    summary = f"""
-    {info.get('shortName', ticker)} currently has
-    revenue growth of {revenue_growth:.2f}%,
-    profit margins of {profit_margin:.2f}%,
-    and return on equity of {roe:.2f}%.
+st.header("S&P 500 AI Market Scanner")
 
-    Based on the AI financial model,
-    the stock scored {score:.2f}
-    and is classified as {rating}.
+if st.button("Run S&P 500 Scan"):
 
-    The risk profile is currently classified
-    as {risk}.
-    """
+    tickers = get_sp500_tickers()
 
-    st.subheader("AI Financial Summary")
-    st.write(summary)
+    results = []
 
-# --------------------------------------------------
-# MARKET RANKINGS
-# --------------------------------------------------
+    progress = st.progress(0)
+    total = len(tickers)
 
-st.header("Top AI-Ranked Stocks")
+    for i, t in enumerate(tickers):
 
-results = []
+        data = score_stock(t)
 
-for symbol in WATCHLIST:
+        if data:
+            results.append(data)
 
-    result = get_stock_score(symbol)
+        progress.progress((i + 1) / total)
 
-    if result:
-        results.append(result)
+    df = pd.DataFrame(results)
 
-if len(results) > 0:
+    # Remove bad data
+    df = df.dropna()
 
-    ranking_df = pd.DataFrame(results)
+    # ==================================================
+    # TOP AI STOCKS
+    # ==================================================
 
-    # TOP AI SCORES
+    st.subheader("Top 10 AI Stocks")
 
-    top_ai = ranking_df.sort_values(
-        by="AI Score",
-        ascending=False
-    )
+    top_ai = df.sort_values("AI Score", ascending=False).head(10)
 
-    fig1 = go.Figure()
+    st.dataframe(top_ai[["Ticker", "AI Score"]])
 
-    fig1.add_bar(
-        x=top_ai["Ticker"],
-        y=top_ai["AI Score"]
-    )
+    # ==================================================
+    # TOP GROWTH STOCKS
+    # ==================================================
 
-    fig1.update_layout(
-        title="Top AI Scoring Stocks"
-    )
+    st.subheader("Top 10 Growth Stocks")
 
-    st.plotly_chart(
-        fig1,
-        use_container_width=True
-    )
+    top_growth = df.sort_values("Growth Score", ascending=False).head(10)
 
-    # TOP INVESTMENTS
+    st.dataframe(top_growth[["Ticker", "Growth Score"]])
 
-    top_investments = ranking_df.sort_values(
-        by="Investment Score",
-        ascending=False
-    )
+    # ==================================================
+    # LOW RISK STOCKS
+    # ==================================================
 
-    fig2 = go.Figure()
+    st.subheader("Top 10 Low-Risk Stocks")
 
-    fig2.add_bar(
-        x=top_investments["Ticker"],
-        y=top_investments["Investment Score"]
-    )
+    low_risk = df.sort_values("Risk Score", ascending=True).head(10)
 
-    fig2.update_layout(
-        title="Top AI Investment Picks"
-    )
+    st.dataframe(low_risk[["Ticker", "Risk Score"]])
 
-    st.plotly_chart(
-        fig2,
-        use_container_width=True
-    )
+    # ==================================================
+    # VALUE STOCKS
+    # ==================================================
 
-    st.subheader("Current AI Top Pick")
+    st.subheader("Top 10 Value Stocks")
 
-    best_stock = top_investments.iloc[0]["Ticker"]
+    top_value = df.sort_values("Value Score", ascending=False).head(10)
 
-    st.success(
-        f"The current highest-ranked investment in the watchlist is {best_stock}."
-    )
+    st.dataframe(top_value[["Ticker", "Value Score"]])
+
+    # ==================================================
+    # BEST OVERALL PICK
+    # ==================================================
+
+    best = df.sort_values("AI Score", ascending=False).iloc[0]["Ticker"]
+
+    st.success(f"Top AI Pick Right Now: {best}")
