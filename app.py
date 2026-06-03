@@ -78,11 +78,9 @@ def normalize(x):
     return max(0, min(100, x))
 
 def classify(x):
-    if x < 20:
-        return "Bad"
-    elif x < 40:
-        return "OK"
-    return "Good"
+    if x < 19:
+        return "Potential Loss"
+    return "Profitable"
 
 # ==================================================
 # LOAD STOCK DATA
