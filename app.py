@@ -47,7 +47,6 @@ def get_sp500_tickers():
         return table["Symbol"].tolist()
 
     except:
-        # fallback if scraping fails
         return ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA"]
 
 # ==================================================
@@ -123,9 +122,7 @@ def score_stock(ticker):
     ai_score = normalize(ai_raw)
 
     growth_score = revenue + roe
-
     risk_score = beta
-
     value_score = (100 / pe if pe > 0 else 0) + margin + roe
 
     return {
@@ -195,29 +192,29 @@ if st.button("Run Scan"):
         tickers = list(set(get_sp500_tickers() + get_nasdaq_tickers()))
 
     results = []
-
     progress = st.progress(0)
     total = len(tickers)
 
     for i, t in enumerate(tickers):
 
-        results.append(score_stock(t))
+        try:
+            results.append(score_stock(t))
+        except:
+            pass
 
-        # prevents Yahoo Finance overload
-        time.sleep(0.05)
-
+        time.sleep(0.03)
         progress.progress((i + 1) / total)
 
     df = pd.DataFrame(results)
-
-    df = df[df["AI Score"].notna()]
+    df = df.dropna(subset=["AI Score"])
+    df = df.sort_values("AI Score", ascending=False)
 
     # ==================================================
     # TABLES
     # ==================================================
 
     st.subheader("Top 10 AI Stocks")
-    st.dataframe(df.sort_values("AI Score", ascending=False).head(10))
+    st.dataframe(df.head(10))
 
     st.subheader("Top 10 Growth Stocks")
     st.dataframe(df.sort_values("Growth Score", ascending=False).head(10))
@@ -229,8 +226,34 @@ if st.button("Run Scan"):
     st.dataframe(df.sort_values("Value Score", ascending=False).head(10))
 
     # ==================================================
+    # FIXED FULL RANKING CHART (KEY FIX)
+    # ==================================================
+
+    st.subheader("Top 25 AI Ranked Stocks (Visual)")
+
+    top_25 = df.head(25)
+
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Bar(
+            x=top_25["Ticker"],
+            y=top_25["AI Score"]
+        )
+    )
+
+    fig.update_layout(
+        title="AI Stock Ranking (Full Market Scan)",
+        xaxis_title="Ticker",
+        yaxis_title="AI Score",
+        height=500
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    # ==================================================
     # BEST PICK
     # ==================================================
 
-    best = df.sort_values("AI Score", ascending=False).iloc[0]["Ticker"]
+    best = df.iloc[0]["Ticker"]
     st.success(f"Top AI Pick: {best}")
